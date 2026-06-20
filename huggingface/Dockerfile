@@ -1,6 +1,6 @@
 # Pre-built image published by GitHub Actions to GHCR.
 # __GHCR_IMAGE__ is substituted during deploy.
-FROM __GHCR_IMAGE__
+FROM ghcr.io/97lianxisheng/hermes-studio:latest
 
 ENV PORT=7860
 ENV BIND_HOST=0.0.0.0
