@@ -1,0 +1,108 @@
+name: Build and Deploy to Hugging Face Space
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'package*.json'
+      - 'packages/**'
+      - 'bin/**'
+      - 'huggingface/**'
+      - '.github/workflows/huggingface-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hf-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-image:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build complete image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: hermes-web-ui:hf-build
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Image build summary
+        run: docker image inspect hermes-web-ui:hf-build --format 'Built {{.Id}} ({{.Size}} bytes)'
+
+  deploy-to-hf:
+    name: Deploy to Hugging Face Space
+    needs: build-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: vars.HF_USERNAME != '' && vars.HF_SPACE_NAME != ''
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Sync files to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USERNAME: ${{ vars.HF_USERNAME }}
+          HF_SPACE_NAME: ${{ vars.HF_SPACE_NAME }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${HF_TOKEN:-}" ]; then
+            echo "HF_TOKEN secret is required for deployment."
+            exit 1
+          fi
+
+          WORKDIR=$(mktemp -d)
+          git clone "https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/${HF_SPACE_NAME}" "$WORKDIR"
+
+          rsync -av --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'huggingface' \
+            --exclude 'hermes_data' \
+            --exclude 'node_modules' \
+            --exclude 'dist' \
+            --exclude 'coverage' \
+            --exclude 'playwright-report' \
+            --exclude 'test-results' \
+            --exclude 'packages/desktop/dist' \
+            --exclude 'packages/desktop/release' \
+            --exclude 'packages/desktop/resources' \
+            ./ "$WORKDIR/"
+
+          cp huggingface/README.md "$WORKDIR/README.md"
+
+          cd "$WORKDIR"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if git diff --staged --quiet; then
+            echo "No changes to deploy."
+            exit 0
+          fi
+
+          git commit -m "Deploy from GitHub ${GITHUB_SHA::7}"
+          git push origin main

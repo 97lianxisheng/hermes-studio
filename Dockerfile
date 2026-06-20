@@ -42,7 +42,9 @@ ENV HERMES_HOME=/home/agent/.hermes
 ENV HERMES_WEB_UI_MANAGED_GATEWAY=1
 ENV PATH=/opt/hermes/.venv/bin:$PATH
 
-EXPOSE 6060
+EXPOSE 6060 7860
+
+# Hugging Face Spaces sets PORT=7860 at runtime. Docker Compose defaults to 6060 via env.
 
 # 强制覆盖基础镜像的默认启动脚本，让镜像本身具备独立运行的能力
 ENTRYPOINT ["node", "dist/server/index.js"]
