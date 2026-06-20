@@ -12,7 +12,9 @@ pinned: false
 
 Self-hosted AI chat dashboard for Hermes Agent — multi-model web UI with multi-platform integration.
 
-This Space is deployed automatically from GitHub Actions. The container listens on port **7860** (set by Hugging Face via the `PORT` environment variable).
+This Space pulls a pre-built image from GitHub Container Registry (GHCR), published by GitHub Actions. The container listens on port **7860** (set by Hugging Face via the `PORT` environment variable).
+
+**Important:** The GHCR package must be **public** so Hugging Face can pull it. After the first workflow run, open your GitHub profile → **Packages** → select the package → **Package settings** → **Change visibility** → **Public**.
 
 ## Configuration
 
